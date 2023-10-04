@@ -7,6 +7,7 @@ use Doctrine\ORM\Mapping as ORM;
 use App\Repository\ConferenceRepository;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\Common\Collections\ArrayCollection;
+use Symfony\Component\String\Slugger\SluggerInterface;
 
 #[ORM\Entity(repositoryClass: ConferenceRepository::class)]
  class Conference implements Stringable
@@ -32,6 +33,9 @@ use Doctrine\Common\Collections\ArrayCollection;
 
     #[ORM\OneToMany(mappedBy: 'conference', targetEntity: Comment::class, orphanRemoval: true)]
     private Collection $comments;
+
+    #[ORM\Column(length: 255, unique:true)]
+    private ?string $slug = null;
 
     public function __construct()
     {
@@ -65,6 +69,13 @@ use Doctrine\Common\Collections\ArrayCollection;
         $this->year = $year;
 
         return $this;
+    }
+    
+    public function computeSlug(SluggerInterface $slugger)
+    {
+        if (!$this->slug || '-' === $this->slug) {
+            $this->slug = (string) $slugger->slug((string) $this)->lower();
+       }
     }
 
     public function isIsInternational(): ?bool
@@ -105,6 +116,18 @@ use Doctrine\Common\Collections\ArrayCollection;
                 $comment->setConference(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getSlug(): ?string
+    {
+        return $this->slug;
+    }
+
+    public function setSlug(string $slug): static
+    {
+        $this->slug = $slug;
 
         return $this;
     }
