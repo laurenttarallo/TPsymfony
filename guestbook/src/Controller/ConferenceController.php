@@ -3,54 +3,83 @@
 namespace App\Controller;
 
 use Twig\Environment;
+use App\Entity\Comment;
 use App\Entity\Conference;
+use App\Form\CommentFormType;
 use App\Repository\CommentRepository;
 use App\Repository\ConferenceRepository;
+use App\SpamChecker;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\File\Exception\FileException;
 
 class ConferenceController extends AbstractController
 {
+    public function __construct(private readonly EntityManagerInterface $entityManager) { }
+    
     #[Route('/', name: 'homepage')]
-    public function index(Request $request): Response
+    public function index(Environment $twig): Response
     {
-        $greet = '';
-        if ($name = $request->query->get('hello')) {
-            $greet = sprintf('<h1>Hello %s!</h1>', htmlspecialchars($name));
-        }
-        return new Response(<<<EOF
-                  <html>
-                       <body>
-                       $greet
-                       <img src="/images/under-construction.gif" />
-                       </body>
-                  </html>
-               EOF);
+        return new Response($twig->render('conference/index.html.twig'));
     }
 
-
-    #[Route('/conferences', name: 'conferences')]
-    public function conferences(): Response
-    {
-
-        return $this->render('conference/index.html.twig', [
-            
-        ]);
-    }
-    #[Route('/conference/{id}', name: 'conference')]
-    public function show(Request $request, Conference $conference, CommentRepository $commentRepository,): Response
+    #[Route('/conference/{slug}', name: 'conference')]
+    public function show(
+        Request $request, 
+        Conference $conference,
+        CommentRepository $commentRepository,
+        #[Autowire('%photo_dir%')] string $photoDir,
+        SpamChecker $spamChecker
+    ): Response
     {
         $offset = max(0, $request->query->getInt('offset', 0));
-        $paginator = $commentRepository->getCommentPaginator($conference, $offset); {
-            return $this->render('conference/show.html.twig', [
-              
-                'conference' => $conference,
-                'comments' => $paginator,
-                'previous' => $offset - CommentRepository::PAGINATOR_PER_PAGE,
-                'next' => min(count($paginator), $offset + CommentRepository::PAGINATOR_PER_PAGE),
-            ]);
+        $paginator = $commentRepository->getCommentPaginator($conference, $offset);
+
+        $comment = new Comment();
+        $form = $this->createForm(CommentFormType::class, $comment);
+
+        $form->handleRequest($request);
+        if ($form->isSubmitted() && $form->isValid()) {
+            $comment->setConference($conference);
+
+            if ($photo = $form['photo']->getData()) {
+                $filename = bin2hex(random_bytes(6)).'.'.$photo->guessExtension();
+                try {
+                    $photo->move($photoDir, $filename);
+                } catch (FileException $e) {
+                    // unable to upload the photo, give up
+                }
+                $comment->setPhotoFilename($filename);
+            }
+
+            $this->entityManager->persist($comment);
+
+            $context = [
+                'user_ip' => $request->getClientIp(),
+                'user_agent' => $request->headers->get('user-agent'),
+                'referrer' => $request->headers->get('referer'),
+                'permalink' => $request->getUri(),
+            ];
+            
+            if (2 === $spamChecker->getSpamScore($comment, $context)) {
+                throw new \RuntimeException('Blatant spam, go away!');
+            }
+
+            $this->entityManager->flush();
+
+            return $this->redirectToRoute('conference', ['slug' => $conference->getSlug()]);
         }
+  
+        return $this->render('conference/show.html.twig', [
+            'comment_form' => $form,
+            'conference' => $conference,
+            'comments' => $paginator,
+            'previous' => $offset - CommentRepository::PAGINATOR_PER_PAGE,
+            'next' => min(count($paginator), $offset + CommentRepository::PAGINATOR_PER_PAGE),
+        ]);
     }
 }

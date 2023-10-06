@@ -2,50 +2,42 @@
 
 namespace App\Entity;
 
+use App\Entity\Trait\TimestampableTrait;
 use App\Repository\ProductRepository;
-use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
+#[ORM\HasLifecycleCallbacks]
 class Product implements \Stringable
 {
+    use TimestampableTrait;
+    
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
     private ?int $id = null;
 
+    #[ORM\Column(length: 255)]
+    private ?string $name = null;
+
+    #[ORM\Column]
+    private ?float $price = null;
+
+    #[ORM\Column(length: 255)]
+    private ?string $description = null;
+
     #[ORM\ManyToOne(inversedBy: 'products')]
     #[ORM\JoinColumn(nullable: false)]
     private ?Category $category = null;
 
-    #[ORM\Column(length: 255)]
-    private ?string $name = null;
-
-    #[ORM\Column(type: Types::TEXT)]
-    private ?string $description = null;
-
-    #[ORM\Column]
-    private ?int $price = null;
-
     public function __toString(): string
-   {
-        return (string)$this->name;
-   }
+    {
+        return (string) $this->name;
+    }
+
     public function getId(): ?int
     {
         return $this->id;
-    }
-
-    public function getCategory(): ?Category
-    {
-        return $this->category;
-    }
-
-    public function setCategory(?Category $category): static
-    {
-        $this->category = $category;
-
-        return $this;
     }
 
     public function getName(): ?string
@@ -56,6 +48,18 @@ class Product implements \Stringable
     public function setName(string $name): static
     {
         $this->name = $name;
+
+        return $this;
+    }
+
+    public function getPrice(): ?float
+    {
+        return $this->price;
+    }
+
+    public function setPrice(float $price): static
+    {
+        $this->price = $price;
 
         return $this;
     }
@@ -72,14 +76,14 @@ class Product implements \Stringable
         return $this;
     }
 
-    public function getPrice(): ?int
+    public function getCategory(): ?Category
     {
-        return $this->price;
+        return $this->category;
     }
 
-    public function setPrice(int $price): static
+    public function setCategory(?Category $category): static
     {
-        $this->price = $price;
+        $this->category = $category;
 
         return $this;
     }

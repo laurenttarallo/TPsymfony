@@ -2,25 +2,28 @@
 
 namespace App\Entity;
 
+use App\Entity\Trait\TimestampableTrait;
 use App\Repository\CategoryRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
-use Stringable;
 
 #[ORM\Entity(repositoryClass: CategoryRepository::class)]
-class Category implements Stringable
+#[ORM\HasLifecycleCallbacks]
+class Category implements \Stringable
 {
+    use TimestampableTrait;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\OneToMany(mappedBy: 'category', targetEntity: Product::class)]
-    private Collection $products;
-
     #[ORM\Column(length: 255)]
     private ?string $name = null;
+
+    #[ORM\OneToMany(mappedBy: 'category', targetEntity: Product::class, orphanRemoval: true)]
+    private Collection $products;
 
     public function __construct()
     {
@@ -29,13 +32,24 @@ class Category implements Stringable
 
     public function __toString(): string
     {
-        return (string)$this->name;
+        return (string) $this->name;
     }
-
 
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    public function getName(): ?string
+    {
+        return $this->name;
+    }
+
+    public function setName(string $name): static
+    {
+        $this->name = $name;
+
+        return $this;
     }
 
     /**
@@ -64,18 +78,6 @@ class Category implements Stringable
                 $product->setCategory(null);
             }
         }
-
-        return $this;
-    }
-
-    public function getName(): ?string
-    {
-        return $this->name;
-    }
-
-    public function setName(string $name): static
-    {
-        $this->name = $name;
 
         return $this;
     }
